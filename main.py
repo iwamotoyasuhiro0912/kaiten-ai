@@ -3,11 +3,13 @@
 複数プロバイダーのAPIキーを日替わりローテーションするゲートウェイ
 """
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 import sqlite3
 import litellm
+import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 import os
@@ -18,7 +20,30 @@ litellm.set_verbose = False  # ログ抑制
 
 # ── 設定 ─────────────────────────────────────────────────────
 DB_PATH = os.getenv("DB_PATH", "data/kaiten.db")
-ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")  # 空=認証なし
+ADMIN_USER  = os.getenv("ADMIN_USER",  "admin")   # ユーザー名（デフォルト: admin）
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")         # パスワード（空=認証なし）
+
+# ── HTTP Basic認証 ────────────────────────────────────────────
+security = HTTPBasic()
+
+def require_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    """ADMIN_TOKENが設定されていれば Basic認証を要求する"""
+    if not ADMIN_TOKEN:
+        return  # 認証なしモード（後退互換）
+    ok_user = secrets.compare_digest(
+        credentials.username.encode("utf-8"),
+        ADMIN_USER.encode("utf-8")
+    )
+    ok_pass = secrets.compare_digest(
+        credentials.password.encode("utf-8"),
+        ADMIN_TOKEN.encode("utf-8")
+    )
+    if not (ok_user and ok_pass):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="認証失敗",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
 # プロバイダー → LiteLLMプレフィックス
 PROVIDER_MAP = {
@@ -219,7 +244,7 @@ class KeyUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-# ── Routes: Core ──────────────────────────────────────────────
+# ── Routes: Core（認証不要） ───────────────────────────────────
 @app.get("/")
 async def root():
     return {"service": "Kaiten AI Gateway 🍣", "status": "ok",
@@ -296,14 +321,17 @@ async def chat(req: ChatRequest):
         raise HTTPException(500, {"error": str(e), "provider": provider, "model": litellm_model})
 
 
-# ── Routes: Key CRUD ──────────────────────────────────────────
+# ── Routes: Key CRUD（認証必要） ──────────────────────────────
 @app.get("/api/keys")
-async def api_list_keys(provider: Optional[str] = Query(None)):
+async def api_list_keys(
+    provider: Optional[str] = Query(None),
+    _: None = Depends(require_auth)
+):
     return list_keys(provider)
 
 
 @app.post("/api/keys", status_code=201)
-async def api_add_key(req: KeyCreate):
+async def api_add_key(req: KeyCreate, _: None = Depends(require_auth)):
     prov = req.provider.lower()
     if prov not in PROVIDER_MAP:
         raise HTTPException(400, {"error": f"Unknown provider: {prov}", "available": sorted(PROVIDER_MAP.keys())})
@@ -314,20 +342,20 @@ async def api_add_key(req: KeyCreate):
 
 
 @app.patch("/api/keys/{key_id}")
-async def api_update_key(key_id: int, req: KeyUpdate):
+async def api_update_key(key_id: int, req: KeyUpdate, _: None = Depends(require_auth)):
     update_key(key_id, label=req.label, is_active=req.is_active)
     return {"status": "updated", "id": key_id}
 
 
 @app.delete("/api/keys/{key_id}")
-async def api_delete_key(key_id: int):
+async def api_delete_key(key_id: int, _: None = Depends(require_auth)):
     delete_key(key_id)
     return {"status": "deleted", "id": key_id}
 
 
-# ── Routes: Rotation Info ─────────────────────────────────────
+# ── Routes: Rotation Info（認証必要） ─────────────────────────
 @app.get("/api/rotation")
-async def api_rotation():
+async def api_rotation(_: None = Depends(require_auth)):
     """今日のローテーション状況を返す"""
     day_idx = get_jst_day_index()
     jst = datetime.now(timezone(timedelta(hours=9)))
@@ -367,7 +395,7 @@ async def api_rotation():
 
 
 @app.get("/api/log")
-async def api_log(limit: int = Query(50, le=500)):
+async def api_log(limit: int = Query(50, le=500), _: None = Depends(require_auth)):
     with get_db() as conn:
         rows = conn.execute(
             "SELECT * FROM request_log ORDER BY id DESC LIMIT ?", (limit,)
@@ -375,9 +403,9 @@ async def api_log(limit: int = Query(50, le=500)):
     return [dict(r) for r in rows]
 
 
-# ── Admin UI ──────────────────────────────────────────────────
+# ── Admin UI（認証必要） ───────────────────────────────────────
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_ui():
+async def admin_ui(_: None = Depends(require_auth)):
     path = "static/index.html"
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
