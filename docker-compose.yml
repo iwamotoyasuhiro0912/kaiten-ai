@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  kaiten-ai:
+    build: .
+    container_name: kaiten-ai
+    restart: unless-stopped
+    ports:
+      - "8300:8300"
+    volumes:
+      - ./data:/app/data          # SQLite永続化
+    environment:
+      - PORT=8300
+      - DB_PATH=data/kaiten.db
+      # ↓ 初期キーを入れる場合（任意）
+      # - GROQ_API_KEY=gsk_xxx
+      # - GEMINI_API_KEY=AIzaxxx
+      # - OPENAI_API_KEY=sk-xxx
+    env_file:
+      - .env                      # .envファイルから自動読み込み
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8300/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
