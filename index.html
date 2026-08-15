@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>🍣 Kaiten AI Gateway</title>
+<style>
+  :root {
+    --bg:       #0f1117;
+    --bg2:      #1a1d27;
+    --bg3:      #22263a;
+    --accent:   #6c63ff;
+    --accent2:  #ff6584;
+    --green:    #4ade80;
+    --red:      #f87171;
+    --yellow:   #fbbf24;
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --border:   #2d3452;
+    --radius:   10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0 0 60px;
+  }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(135deg, #1a1d27 0%, #16192b 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; gap: 10px;
+  }
+  header h1 { font-size: 1.15rem; font-weight: 700; }
+  header .sub { font-size: 0.75rem; color: var(--muted); }
+
+  /* ── Rotation Banner ── */
+  #rotation-banner {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    font-size: 0.78rem;
+  }
+  .rot-chip {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 10px;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .rot-chip .prov { color: var(--accent); font-weight: 600; }
+  .rot-chip .key  { font-family: monospace; color: var(--yellow); }
+  .rot-chip .cnt  { color: var(--muted); }
+
+  /* ── Main ── */
+  main { padding: 16px; }
+
+  /* ── Section ── */
+  .section {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .section-head {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--bg3);
+  }
+  .section-head h2 { font-size: 0.9rem; font-weight: 600; }
+
+  /* ── Provider Tabs ── */
+  .tabs {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    font-size: 0.78rem;
+    cursor: pointer;
+    background: var(--bg3);
+    color: var(--muted);
+    transition: all .15s;
+  }
+  .tab:hover  { border-color: var(--accent); color: var(--accent); }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  th {
+    background: var(--bg3);
+    color: var(--muted);
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(108,99,255,.06); }
+  tr.active-row td { background: rgba(74,222,128,.04); }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 2px 8px; border-radius: 12px;
+    font-size: 0.72rem; font-weight: 600;
+  }
+  .badge-green  { background: rgba(74,222,128,.15); color: var(--green); }
+  .badge-red    { background: rgba(248,113,113,.15); color: var(--red);   }
+  .badge-yellow { background: rgba(251,191,36,.15);  color: var(--yellow);}
+  .badge-prov   { background: rgba(108,99,255,.15);  color: var(--accent);}
+
+  /* ── Buttons ── */
+  .btn {
+    border: none; border-radius: 6px; padding: 5px 10px;
+    font-size: 0.78rem; cursor: pointer; transition: opacity .15s;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .btn:hover { opacity: .8; }
+  .btn-del  { background: rgba(248,113,113,.2); color: var(--red); }
+  .btn-tog  { background: rgba(108,99,255,.2);  color: var(--accent); }
+  .btn-add  { background: var(--accent); color: #fff; }
+  .btn-save { background: var(--green); color: #1a1a1a; }
+  .btn-sm   { padding: 3px 7px; font-size: 0.72rem; }
+
+  /* ── Add Form ── */
+  .add-form {
+    padding: 14px;
+    border-top: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 120px; }
+  .form-group label { font-size: 0.72rem; color: var(--muted); }
+  select, input[type="text"], input[type="password"] {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 0.82rem;
+    width: 100%;
+  }
+  select:focus, input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  /* ── Key preview (monospace) ── */
+  .key-mono { font-family: monospace; font-size: 0.8rem; color: var(--yellow); letter-spacing: .5px; }
+  .today-star { color: var(--yellow); margin-right: 3px; }
+
+  /* ── Empty ── */
+  .empty { text-align: center; padding: 30px; color: var(--muted); font-size: 0.85rem; }
+
+  /* ── Countdown ── */
+  #countdown { font-family: monospace; color: var(--yellow); }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--accent); color: #fff;
+    padding: 10px 20px; border-radius: 20px;
+    font-size: 0.85rem; pointer-events: none;
+    opacity: 0; transition: opacity .2s;
+    z-index: 999; white-space: nowrap;
+  }
+  #toast.show { opacity: 1; }
+
+  /* ── Log ── */
+  .log-row { font-size: 0.75rem; }
+  .status-ok    { color: var(--green); }
+  .status-error { color: var(--red); }
+
+  /* ── Responsive ── */
+  @media (max-width: 480px) {
+    th.hide-sm, td.hide-sm { display: none; }
+    .add-form { gap: 6px; }
+    .form-group { min-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🍣 Kaiten AI Gateway</h1>
+    <div class="sub">APIキーローテーション管理</div>
+  </div>
+  <div style="margin-left:auto;text-align:right;font-size:.75rem">
+    <div style="color:var(--muted)">次のローテーション</div>
+    <div id="countdown" style="color:var(--yellow)">--:--:--</div>
+  </div>
+</header>
+
+<!-- Rotation Banner -->
+<div id="rotation-banner">
+  <span style="color:var(--muted);font-size:.75rem;margin-right:4px">本日のアクティブキー：</span>
+  <div id="rot-chips"></div>
+</div>
+
+<main>
+
+<!-- ── Key Manager ── -->
+<div class="section">
+  <div class="section-head">
+    <h2>🔑 APIキー一覧</h2>
+    <span id="key-count" style="font-size:.75rem;color:var(--muted)"></span>
+  </div>
+
+  <!-- Provider Tabs -->
+  <div class="tabs" id="provider-tabs">
+    <div class="tab active" data-prov="all">全て</div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table id="key-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>プロバイダー</th>
+          <th>ラベル</th>
+          <th>APIキー</th>
+          <th class="hide-sm">追加日</th>
+          <th class="hide-sm">今日の使用</th>
+          <th>ステータス</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="key-tbody">
+        <tr><td colspan="8" class="empty">読み込み中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Add Form -->
+  <div class="add-form">
+    <div class="form-group" style="flex:0 0 130px">
+      <label>プロバイダー</label>
+      <select id="new-provider">
+        <option value="groq">Groq</option>
+        <option value="gemini">Gemini</option>
+        <option value="openai">OpenAI</option>
+        <option value="anthropic">Anthropic</option>
+        <option value="mistral">Mistral</option>
+        <option value="cerebras">Cerebras</option>
+        <option value="openrouter">OpenRouter</option>
+        <option value="deepseek">DeepSeek</option>
+        <option value="perplexity">Perplexity</option>
+        <option value="together">Together AI</option>
+        <option value="xai">xAI</option>
+        <option value="nvidia">NVIDIA</option>
+        <option value="cohere">Cohere</option>
+      </select>
+    </div>
+    <div class="form-group" style="flex:0 0 140px">
+      <label>ラベル（任意）</label>
+      <input type="text" id="new-label" placeholder="アカウント名など">
+    </div>
+    <div class="form-group" style="flex:1;min-width:200px">
+      <label>APIキー</label>
+      <input type="password" id="new-key" placeholder="sk-xxx..." autocomplete="off">
+    </div>
+    <button class="btn btn-add" onclick="addKey()">➕ 追加</button>
+  </div>
+</div>
+
+<!-- ── Chat Test ── -->
+<div class="section">
+  <div class="section-head">
+    <h2>💬 チャットテスト</h2>
+  </div>
+  <div style="padding:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+    <div class="form-group" style="flex:0 0 160px">
+      <label>モデル（例: groq / groq/llama3-8b-8192）</label>
+      <input type="text" id="test-model" value="groq" placeholder="groq">
+    </div>
+    <div class="form-group" style="flex:1;min-width:200px">
+      <label>メッセージ</label>
+      <input type="text" id="test-msg" placeholder="Hello! / こんにちは！" value="日本語で一言だけ挨拶して">
+    </div>
+    <button class="btn btn-add" onclick="testChat()">🚀 送信</button>
+  </div>
+  <div id="test-result" style="padding:0 14px 14px;font-size:.82rem;color:var(--muted);font-family:monospace;white-space:pre-wrap;word-break:break-all;display:none"></div>
+</div>
+
+<!-- ── Request Log ── -->
+<div class="section">
+  <div class="section-head">
+    <h2>📊 リクエストログ</h2>
+    <button class="btn btn-tog btn-sm" onclick="loadLog()">🔄 更新</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>日時</th>
+          <th>プロバイダー</th>
+          <th class="hide-sm">モデル</th>
+          <th>ステータス</th>
+          <th class="hide-sm">トークン</th>
+          <th>レイテンシ</th>
+        </tr>
+      </thead>
+      <tbody id="log-tbody">
+        <tr><td colspan="6" class="empty">ログを読み込んでください</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+let allKeys     = [];
+let activeFilter = 'all';
+let rotationData = {};
+let todayActiveIds = new Set();
+
+// ── Init ──────────────────────────────────────────────────────
+(async () => {
+  await Promise.all([loadKeys(), loadRotation()]);
+  loadLog();
+  startCountdown();
+})();
+
+// ── API Helpers ───────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ error: r.statusText }));
+    throw new Error(err.error || r.statusText);
+  }
+  return r.json();
+}
+
+// ── Load Keys ─────────────────────────────────────────────────
+async function loadKeys() {
+  try {
+    allKeys = await api('GET', '/api/keys');
+    renderTabs();
+    renderTable();
+    document.getElementById('key-count').textContent = `${allKeys.length}件`;
+  } catch(e) { showToast('❌ キー取得失敗: ' + e.message, 'error'); }
+}
+
+// ── Load Rotation ─────────────────────────────────────────────
+async function loadRotation() {
+  try {
+    const data = await api('GET', '/api/rotation');
+    rotationData = data;
+    todayActiveIds = new Set();
+
+    // Collect today's active key IDs
+    for (const [, info] of Object.entries(data.providers || {})) {
+      if (info.active_key) todayActiveIds.add(info.active_key.id);
+    }
+
+    // Rotation chips
+    const chips = document.getElementById('rot-chips');
+    chips.innerHTML = '';
+    for (const [prov, info] of Object.entries(data.providers || {})) {
+      const k = info.active_key;
+      const chip = document.createElement('div');
+      chip.className = 'rot-chip';
+      chip.innerHTML = `<span class="prov">${prov}</span>
+        <span class="key">${k.preview}</span>
+        <span class="cnt">${info.total_keys}本中${info.active_index + 1}番目</span>`;
+      chips.appendChild(chip);
+    }
+    if (!Object.keys(data.providers || {}).length) {
+      chips.innerHTML = '<span style="color:var(--muted)">キーが登録されていません</span>';
+    }
+
+    // Countdown target
+    window._nextRotation = new Date(data.next_rotation_jst.replace(' JST','').replace(' ','T') + '+09:00');
+  } catch(e) { console.error(e); }
+}
+
+// ── Countdown ─────────────────────────────────────────────────
+function startCountdown() {
+  setInterval(() => {
+    if (!window._nextRotation) return;
+    const diff = Math.max(0, (window._nextRotation - Date.now()) / 1000);
+    const h = String(Math.floor(diff / 3600)).padStart(2,'0');
+    const m = String(Math.floor((diff % 3600) / 60)).padStart(2,'0');
+    const s = String(Math.floor(diff % 60)).padStart(2,'0');
+    document.getElementById('countdown').textContent = `${h}:${m}:${s}`;
+    if (diff === 0) { loadRotation(); loadKeys(); }
+  }, 1000);
+}
+
+// ── Render Tabs ───────────────────────────────────────────────
+function renderTabs() {
+  const provs = [...new Set(allKeys.map(k => k.provider))].sort();
+  const tabs = document.getElementById('provider-tabs');
+  tabs.innerHTML = `<div class="tab ${activeFilter==='all'?'active':''}" data-prov="all" onclick="filterProv('all')">全て</div>`;
+  provs.forEach(p => {
+    const cnt = allKeys.filter(k => k.provider === p).length;
+    tabs.innerHTML += `<div class="tab ${activeFilter===p?'active':''}" data-prov="${p}" onclick="filterProv('${p}')">${p} <span style="opacity:.6">${cnt}</span></div>`;
+  });
+}
+
+function filterProv(prov) {
+  activeFilter = prov;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.prov === prov));
+  renderTable();
+}
+
+// ── Render Table ──────────────────────────────────────────────
+function renderTable() {
+  const keys = activeFilter === 'all' ? allKeys : allKeys.filter(k => k.provider === activeFilter);
+  const tbody = document.getElementById('key-tbody');
+  if (!keys.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty">キーがありません。下のフォームから追加してください。</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = keys.map(k => {
+    const isToday = todayActiveIds.has(k.id);
+    const statusBadge = k.is_active
+      ? `<span class="badge badge-green">✅ ON</span>`
+      : `<span class="badge badge-red">❌ OFF</span>`;
+    const todayStar = isToday ? `<span class="today-star" title="本日のアクティブキー">⭐</span>` : '';
+    return `
+      <tr class="${isToday ? 'active-row' : ''}">
+        <td style="color:var(--muted)">${k.id}</td>
+        <td><span class="badge badge-prov">${k.provider}</span></td>
+        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${k.label || ''}">
+          ${todayStar}${k.label || '<span style="color:var(--muted)">-</span>'}
+        </td>
+        <td><span class="key-mono">${k.key_preview}</span></td>
+        <td class="hide-sm" style="color:var(--muted);font-size:.75rem">${(k.created_at||'').slice(0,10)}</td>
+        <td class="hide-sm">${k.today_usage || 0}</td>
+        <td>${statusBadge}</td>
+        <td>
+          <button class="btn btn-tog btn-sm" onclick="toggleKey(${k.id}, ${k.is_active})" title="${k.is_active ? '無効化' : '有効化'}">
+            ${k.is_active ? '⏸' : '▶️'}
+          </button>
+          <button class="btn btn-del btn-sm" onclick="deleteKey(${k.id}, '${k.provider}')" title="削除">🗑️</button>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+// ── Key Actions ───────────────────────────────────────────────
+async function addKey() {
+  const provider = document.getElementById('new-provider').value;
+  const api_key  = document.getElementById('new-key').value.trim();
+  const label    = document.getElementById('new-label').value.trim();
+  if (!api_key) { showToast('❌ APIキーを入力してください'); return; }
+  try {
+    await api('POST', '/api/keys', { provider, api_key, label });
+    document.getElementById('new-key').value   = '';
+    document.getElementById('new-label').value = '';
+    showToast(`✅ ${provider}のキーを追加しました`);
+    await Promise.all([loadKeys(), loadRotation()]);
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+async function deleteKey(id, prov) {
+  if (!confirm(`${prov} のキー #${id} を削除しますか？`)) return;
+  try {
+    await api('DELETE', `/api/keys/${id}`);
+    showToast(`🗑️ キー #${id} を削除しました`);
+    await Promise.all([loadKeys(), loadRotation()]);
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+async function toggleKey(id, currentActive) {
+  try {
+    await api('PATCH', `/api/keys/${id}`, { is_active: !currentActive });
+    showToast(`${!currentActive ? '✅ 有効化' : '⏸ 無効化'}しました`);
+    await Promise.all([loadKeys(), loadRotation()]);
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+// ── Chat Test ─────────────────────────────────────────────────
+async function testChat() {
+  const model = document.getElementById('test-model').value.trim() || 'groq';
+  const msg   = document.getElementById('test-msg').value.trim();
+  if (!msg) { showToast('❌ メッセージを入力してください'); return; }
+  const res = document.getElementById('test-result');
+  res.style.display = 'block';
+  res.style.color = 'var(--muted)';
+  res.textContent = '⏳ 送信中...';
+  try {
+    const t0 = Date.now();
+    const data = await api('POST', '/v1/chat', {
+      model,
+      messages: [{ role: 'user', content: msg }],
+      max_tokens: 512
+    });
+    const elapsed = Date.now() - t0;
+    const content = data?.choices?.[0]?.message?.content || JSON.stringify(data, null, 2);
+    res.style.color = 'var(--green)';
+    res.textContent = `✅ [${elapsed}ms | ${model}]\n\n${content}`;
+    await loadLog();
+  } catch(e) {
+    res.style.color = 'var(--red)';
+    res.textContent = '❌ ' + e.message;
+  }
+}
+
+// ── Log ───────────────────────────────────────────────────────
+async function loadLog() {
+  try {
+    const rows = await api('GET', '/api/log?limit=30');
+    const tbody = document.getElementById('log-tbody');
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">ログなし</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(r => `
+      <tr class="log-row">
+        <td style="color:var(--muted);white-space:nowrap">${(r.created_at||'').slice(5,19)}</td>
+        <td><span class="badge badge-prov">${r.provider||'-'}</span></td>
+        <td class="hide-sm" style="color:var(--muted);font-size:.72rem;max-width:150px;overflow:hidden;text-overflow:ellipsis">${r.model||'-'}</td>
+        <td class="${r.status==='ok'?'status-ok':'status-error'}">${r.status==='ok'?'✅':'❌'}</td>
+        <td class="hide-sm" style="color:var(--muted)">${r.tokens||0}</td>
+        <td style="color:var(--muted)">${r.latency_ms||0}ms</td>
+      </tr>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// Enter key shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('new-key') === document.activeElement) addKey();
+  if (e.key === 'Enter' && document.getElementById('test-msg') === document.activeElement) testChat();
+});
+</script>
+</body>
+</html>
