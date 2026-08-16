@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 import sqlite3
 import litellm
 import secrets
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 import os
@@ -31,7 +32,6 @@ def require_auth(credentials: Optional[HTTPBasicCredentials] = Depends(security)
     """ADMIN_TOKENが設定されていれば Basic認証を要求する"""
     if not ADMIN_TOKEN:
         return
-    # credentials が None = 認証情報が送られていない場合
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -53,6 +53,11 @@ def require_auth(credentials: Optional[HTTPBasicCredentials] = Depends(security)
             headers={"WWW-Authenticate": "Basic"},
         )
 
+# ── <think>ブロック除去 ───────────────────────────────────────
+def strip_think_blocks(content: str) -> str:
+    """Qwen3等の<think>...</think>ブロックをレスポンスから除去する"""
+    return re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+
 # ── 無料プロバイダーのみ ─────────────────────────────────────
 PROVIDER_MAP = {
     "groq":       "groq",
@@ -62,8 +67,6 @@ PROVIDER_MAP = {
     "openrouter": "openrouter",
 }
 
-# プロバイダープレフィックスなしのデフォルトモデル名
-# （custom_llm_provider使用のためプレフィックス不要）
 DEFAULT_MODELS = {
     "groq":       "qwen/qwen3.6-27b",
     "gemini":     "gemini-2.0-flash",
@@ -148,7 +151,7 @@ def record_usage(key_id, provider, model, status, tokens, latency_ms):
         conn.commit()
 
 def inject_no_think(messages: list, litellm_model: str) -> list:
-    """Qwen3系思考モデル使用時、先頭ユーザーメッセージに /no_think を注入して思考ブロック出力を抑制する"""
+    """Qwen3系思考モデル使用時、/no_think を注入して思考ブロック出力を抑制する"""
     if "qwen3" not in litellm_model.lower():
         return messages
     import copy
@@ -218,23 +221,13 @@ async def chat(req: ChatRequest):
         raise HTTPException(503, {"error": f"No active API key for '{provider}'", "hint": f"Add keys at /admin or POST /api/keys"})
 
     litellm_provider = PROVIDER_MAP[provider]
-
-    # bare_model: プロバイダープレフィックスなしのモデル名
-    # 例: "groq/qwen/qwen3.6-27b" → provider="groq", bare_model="qwen/qwen3.6-27b"
     bare_model = model_suffix if model_suffix else DEFAULT_MODELS.get(provider, "default")
-
-    # ログ・デバッグ用の表示名（プレフィックス付き）
     litellm_model_display = f"{litellm_provider}/{bare_model}"
-
     messages_to_send = inject_no_think(req.messages, litellm_model_display)
 
     import time
     t0 = time.time()
     try:
-        # ★ FIX: custom_llm_provider を明示することで litellm の内部モデルバリデーションを
-        # バイパスし、bare_model をそのまま API に渡す。
-        # これにより groq/qwen/qwen3.6-27b 等の新しいモデルが llama-3.3-70b-versatile に
-        # サイレントフォールバックされるバグを修正。
         response = await litellm.acompletion(
             model=bare_model,
             custom_llm_provider=litellm_provider,
@@ -246,6 +239,13 @@ async def chat(req: ChatRequest):
         latency = int((time.time() - t0) * 1000)
         tokens = getattr(response.usage, "total_tokens", 0) if hasattr(response, "usage") else 0
         record_usage(key_info["id"], provider, litellm_model_display, "ok", tokens, latency)
+        # <think>ブロックを除去（Qwen3等の思考モデル対策）
+        try:
+            for choice in (response.choices or []):
+                if choice.message and choice.message.content:
+                    choice.message.content = strip_think_blocks(choice.message.content)
+        except Exception:
+            pass
         return response
     except Exception as e:
         latency = int((time.time() - t0) * 1000)
@@ -270,7 +270,7 @@ async def api_update_key(key_id: int, req: KeyUpdate, _: None = Depends(require_
     return {"status": "updated", "id": key_id}
 
 @app.delete("/api/keys/{key_id}")
-async def api_delete_key(key_id: int, _: None = Depends(require_auth)):    
+async def api_delete_key(key_id: int, _: None = Depends(require_auth)):
     delete_key(key_id)
     return {"status": "deleted", "id": key_id}
 
@@ -296,8 +296,10 @@ async def api_log(limit: int = Query(50, le=500), _: None = Depends(require_auth
         rows = conn.execute("SELECT * FROM request_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
     return [dict(r) for r in rows]
 
+# ── 管理画面（認証なし：JSログインフォームが担当）────────────
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_ui(_: None = Depends(require_auth)):
+async def admin_ui():
+    """管理画面HTML。認証はフロントエンドのログインフォームが行う。"""
     path = "static/index.html"
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f: return f.read()
