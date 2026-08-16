@@ -272,10 +272,10 @@
     <div class="form-group" style="flex:0 0 140px">
       <label>プロバイダー（無料のみ）</label>
       <select id="new-provider">
-        <option value="groq">Groq 🆓</option>
-        <option value="gemini">Gemini 🆓</option>
-        <option value="openrouter">OpenRouter 🆓</option>
-        <option value="cerebras">Cerebras 🆓</option>
+        <option value="groq">Groq</option>
+        <option value="gemini">Gemini</option>
+        <option value="openrouter">OpenRouter</option>
+        <option value="cerebras">Cerebras</option>
       </select>
     </div>
     <div class="form-group" style="flex:0 0 140px">
@@ -301,10 +301,10 @@
     <div class="form-group" style="flex:0 0 150px">
       <label>AI（プロバイダー）</label>
       <select id="test-provider" onchange="updateModelList()">
-        <option value="groq">Groq 🆓</option>
-        <option value="openrouter">OpenRouter 🆓</option>
-        <option value="gemini">Gemini 🆓</option>
-        <option value="cerebras">Cerebras 🆓</option>
+        <option value="groq">Groq</option>
+        <option value="openrouter">OpenRouter</option>
+        <option value="gemini">Gemini</option>
+        <option value="cerebras">Cerebras</option>
       </select>
     </div>
 
@@ -362,48 +362,48 @@
 const PROVIDER_MODELS = {
   'groq': [
     {
-      label: '🌟 qwen/qwen3.6-27b（メイン・深い思考・画像対応）',
+      label: 'qwen/qwen3.6-27b（メイン・深い思考・画像対応）',
       value: 'qwen/qwen3.6-27b',
       hint: 'Dense アーキテクチャ。コーディング・論理推論・画像理解が得意。131k context。速度より精度優先。'
     },
     {
-      label: '⚡ openai/gpt-oss-120b（高速・汎用）',
+      label: 'openai/gpt-oss-120b（高速・汎用）',
       value: 'openai/gpt-oss-120b',
       hint: 'MoE アーキテクチャで超高速（実質51B）。日常チャット・要約・エージェントタスク向け。1000 RPD / 8000 TPM。'
     },
   ],
   'openrouter': [
     {
-      label: '🌟 NVIDIA Nemotron 3 Ultra（無料最高品質・1M context）',
+      label: 'NVIDIA Nemotron 3 Ultra（無料最高品質・1M context）',
       value: 'nvidia/nemotron-3-ultra-550b-a55b:free',
       hint: 'Mamba-2+Transformer MoE 550B/55B-active。無料モデル品質ランキング1位（61点）。ツール対応。1Mトークンコンテキスト。'
     },
     {
-      label: '🖼️ Google Gemma 4 31B（Vision+Tools・262k context）',
+      label: 'Google Gemma 4 31B（Vision+Tools・262k context）',
       value: 'google/gemma-4-31b-it:free',
       hint: 'Google製。Vision・ツール呼び出し対応。品質スコア47（無料2位）。262k context。画像入力OK。'
     },
   ],
   'gemini': [
     {
-      label: '🆕 gemini-3.6-flash（最新GA・コード・エージェント）',
+      label: 'gemini-3.6-flash（最新GA・コード・エージェント）',
       value: 'gemini-3.6-flash',
       hint: '最新安定版（GA）。トークン効率改善・コード/エージェント計画能力向上。無料枠あり。'
     },
     {
-      label: '⚡ gemini-3.5-flash-lite（高速・大量処理向け）',
+      label: 'gemini-3.5-flash-lite（高速・大量処理向け）',
       value: 'gemini-3.5-flash-lite',
       hint: '低レイテンシ・高コスパ。高頻度自動化タスク向けサブエージェント用途に最適。無料枠あり。'
     },
   ],
   'cerebras': [
     {
-      label: '🚀 gpt-oss-120b（唯一の本番モデル・超高速）',
+      label: 'gpt-oss-120b（唯一の本番モデル・超高速）',
       value: 'gpt-oss-120b',
       hint: 'CerebrasのWSEチップ専用。~3000 tokens/s。現在唯一のProduction（本番）モデル。65k context(free)。'
     },
     {
-      label: '🔬 gemma-4-31b（Preview・~1850 tokens/s）',
+      label: 'gemma-4-31b（Preview・~1850 tokens/s）',
       value: 'gemma-4-31b',
       hint: 'Google Gemma 4 31B。~1850 tokens/s。Preview版（本番非推奨だが評価・テスト用途はOK）。65k context(free)。'
     },
