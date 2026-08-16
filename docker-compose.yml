@@ -12,10 +12,14 @@ services:
     environment:
       - PORT=8300
       - DB_PATH=data/kaiten.db
+      - ROOT_PATH=/kaiten-ai      # nginx プレフィックス（URL/kaiten-ai/）
+      # ↓ 認証（必ず設定！空のままでは認証なし）
+      # - ADMIN_TOKEN=your_secret_token
+      # - ADMIN_USER=admin
       # ↓ 初期キーを入れる場合（任意）
       # - GROQ_API_KEY=gsk_xxx
       # - GEMINI_API_KEY=AIzaxxx
-      # - OPENAI_API_KEY=sk-xxx
+      # - OPENROUTER_API_KEY=sk-or-xxx
     env_file:
       - .env                      # .envファイルから自動読み込み
     healthcheck:
