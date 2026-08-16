@@ -62,11 +62,13 @@ PROVIDER_MAP = {
     "openrouter": "openrouter",
 }
 
+# プロバイダープレフィックスなしのデフォルトモデル名
+# （custom_llm_provider使用のためプレフィックス不要）
 DEFAULT_MODELS = {
-    "groq":       "groq/qwen/qwen3.6-27b",
-    "gemini":     "gemini/gemini-2.0-flash",
-    "cerebras":   "cerebras/llama3.1-8b",
-    "openrouter": "openrouter/qwen/qwen3.6-27b",
+    "groq":       "qwen/qwen3.6-27b",
+    "gemini":     "gemini-2.0-flash",
+    "cerebras":   "llama3.1-8b",
+    "openrouter": "qwen/qwen3.6-27b",
 }
 
 def get_db():
@@ -214,21 +216,41 @@ async def chat(req: ChatRequest):
     key_info = get_active_key(provider)
     if not key_info:
         raise HTTPException(503, {"error": f"No active API key for '{provider}'", "hint": f"Add keys at /admin or POST /api/keys"})
-    litellm_prefix = PROVIDER_MAP[provider]
-    litellm_model = f"{litellm_prefix}/{model_suffix}" if model_suffix else DEFAULT_MODELS.get(provider, f"{litellm_prefix}/default")
-    messages_to_send = inject_no_think(req.messages, litellm_model)
+
+    litellm_provider = PROVIDER_MAP[provider]
+
+    # bare_model: プロバイダープレフィックスなしのモデル名
+    # 例: "groq/qwen/qwen3.6-27b" → provider="groq", bare_model="qwen/qwen3.6-27b"
+    bare_model = model_suffix if model_suffix else DEFAULT_MODELS.get(provider, "default")
+
+    # ログ・デバッグ用の表示名（プレフィックス付き）
+    litellm_model_display = f"{litellm_provider}/{bare_model}"
+
+    messages_to_send = inject_no_think(req.messages, litellm_model_display)
+
     import time
     t0 = time.time()
     try:
-        response = await litellm.acompletion(model=litellm_model, messages=messages_to_send, temperature=req.temperature, max_tokens=req.max_tokens, api_key=key_info["api_key"])
+        # ★ FIX: custom_llm_provider を明示することで litellm の内部モデルバリデーションを
+        # バイパスし、bare_model をそのまま API に渡す。
+        # これにより groq/qwen/qwen3.6-27b 等の新しいモデルが llama-3.3-70b-versatile に
+        # サイレントフォールバックされるバグを修正。
+        response = await litellm.acompletion(
+            model=bare_model,
+            custom_llm_provider=litellm_provider,
+            messages=messages_to_send,
+            temperature=req.temperature,
+            max_tokens=req.max_tokens,
+            api_key=key_info["api_key"]
+        )
         latency = int((time.time() - t0) * 1000)
         tokens = getattr(response.usage, "total_tokens", 0) if hasattr(response, "usage") else 0
-        record_usage(key_info["id"], provider, litellm_model, "ok", tokens, latency)
+        record_usage(key_info["id"], provider, litellm_model_display, "ok", tokens, latency)
         return response
     except Exception as e:
         latency = int((time.time() - t0) * 1000)
-        record_usage(key_info["id"], provider, litellm_model, "error", 0, latency)
-        raise HTTPException(500, {"error": str(e), "provider": provider, "model": litellm_model})
+        record_usage(key_info["id"], provider, litellm_model_display, "error", 0, latency)
+        raise HTTPException(500, {"error": str(e), "provider": provider, "model": litellm_model_display})
 
 @app.get("/api/keys")
 async def api_list_keys(provider: Optional[str] = Query(None), _: None = Depends(require_auth)):
