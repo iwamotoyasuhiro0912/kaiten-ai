@@ -1,15 +1,20 @@
 # 🍣 Kaiten AI Gateway
 
-**AIのAPIキーを日替わりローテーションするゲートウェイサーバー**
+**同一AIプロバイダーの複数アカウントAPIキーを日替わりローテーションするゲートウェイサーバー**
 
 ```
-クライアント → Kaiten AI → Groq / Gemini / OpenAI / Anthropic / ...
+クライアント → Kaiten AI → Groq（アカウントA / B / C ... を日替わり）
+                         → Gemini（アカウントA / B / C ... を日替わり）
+                         → Cerebras / OpenRouter / ...
 ```
+
+> **ポイント：** AIそのものをローテーションするのではなく、**同じプロバイダーの複数アカウントのキーを日替わりで切り替える**ことでレート制限を回避します。
 
 ## 特徴
 
 - 🔄 **日替わりローテーション** — 同じプロバイダーのキーを毎日JST 0:00に自動切り替え
-- 🌐 **マルチプロバイダー** — Groq, Gemini, OpenAI, Anthropic, Mistral, Cerebras, DeepSeek, OpenRouter 他
+- 🌐 **マルチプロバイダー** — Groq, Gemini, Cerebras, OpenRouter（すべて無料枠対応）
+- 🧠 **思考ブロック自動抑制** — Qwen3系モデル使用時は `/no_think` を自動注入してレスポンスをクリーンに保つ
 - 🗂️ **Web管理画面** — `/admin` でエクセル風にキーを追加・削除・有効化
 - ⚡ **OpenAI互換** — LiteLLMベースで100+モデルに対応
 - 🔒 **Basic認証対応** — ADMIN_TOKENで管理画面・APIを保護
@@ -66,24 +71,21 @@ curl -X POST http://localhost:8300/v1/chat \
 ```bash
 # プロバイダー/モデル名 の形式
 "model": "groq/llama-3.3-70b-versatile"
+"model": "groq/qwen/qwen3.6-27b"
 "model": "gemini/gemini-2.0-flash"
-"model": "openai/gpt-4o-mini"
+"model": "openrouter/mistralai/mistral-7b-instruct"
 ```
 
-### 対応プロバイダー一覧
+### 対応プロバイダー一覧（無料枠のみ）
 
 | プロバイダー | model値 | デフォルトモデル |
-|------------|--------|--------------|
-| Groq | `groq` | llama-3.3-70b-versatile |
+|------------|--------|--------------| 
+| Groq | `groq` | qwen/qwen3.6-27b |
 | Gemini | `gemini` | gemini-2.0-flash |
-| OpenAI | `openai` | gpt-4o-mini |
-| Anthropic | `anthropic` | claude-3-5-haiku-20241022 |
-| Mistral | `mistral` | mistral-large-latest |
 | Cerebras | `cerebras` | llama3.1-8b |
-| OpenRouter | `openrouter` | auto |
-| DeepSeek | `deepseek` | deepseek-chat |
-| Perplexity | `perplexity` | sonar-small |
-| Together AI | `together` | Llama-3.3-70B |
+| OpenRouter | `openrouter` | qwen/qwen3.6-27b |
+
+> **Qwen3系モデルについて：** 思考ブロック（`<think>...</think>`）の出力は自動的に抑制されます。
 
 ## APIキー管理
 
