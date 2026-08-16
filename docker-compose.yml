@@ -13,7 +13,7 @@ services:
       - PORT=8300
       - DB_PATH=data/kaiten.db
       - ROOT_PATH=/kaiten-ai      # nginx プレフィックス（URL/kaiten-ai/）
-      # ↓ 認証（必ず設定！空のままでは認証なし）
+      # ↓ 認証トークン（必ず設定すること！）
       # - ADMIN_TOKEN=your_secret_token
       # - ADMIN_USER=admin
       # ↓ 初期キーを入れる場合（任意）
