@@ -172,6 +172,17 @@
   .key-mono { font-family: monospace; font-size: 0.8rem; color: var(--yellow); letter-spacing: .5px; }
   .today-star { color: var(--yellow); margin-right: 3px; }
 
+  /* ── Model hint ── */
+  .model-hint {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 4px;
+    padding: 4px 8px;
+    background: var(--bg3);
+    border-radius: 6px;
+    border-left: 2px solid var(--accent);
+  }
+
   /* ── Empty ── */
   .empty { text-align: center; padding: 30px; color: var(--muted); font-size: 0.85rem; }
 
@@ -256,24 +267,15 @@
     </table>
   </div>
 
-  <!-- Add Form -->
+  <!-- Add Form（無料プロバイダーのみ） -->
   <div class="add-form">
-    <div class="form-group" style="flex:0 0 130px">
-      <label>プロバイダー</label>
+    <div class="form-group" style="flex:0 0 140px">
+      <label>プロバイダー（無料のみ）</label>
       <select id="new-provider">
-        <option value="groq">Groq</option>
-        <option value="gemini">Gemini</option>
-        <option value="openai">OpenAI</option>
-        <option value="anthropic">Anthropic</option>
-        <option value="mistral">Mistral</option>
-        <option value="cerebras">Cerebras</option>
-        <option value="openrouter">OpenRouter</option>
-        <option value="deepseek">DeepSeek</option>
-        <option value="perplexity">Perplexity</option>
-        <option value="together">Together AI</option>
-        <option value="xai">xAI</option>
-        <option value="nvidia">NVIDIA</option>
-        <option value="cohere">Cohere</option>
+        <option value="groq">Groq 🆓</option>
+        <option value="gemini">Gemini 🆓</option>
+        <option value="openrouter">OpenRouter 🆓</option>
+        <option value="cerebras">Cerebras 🆓</option>
       </select>
     </div>
     <div class="form-group" style="flex:0 0 140px">
@@ -293,16 +295,35 @@
   <div class="section-head">
     <h2>💬 チャットテスト</h2>
   </div>
-  <div style="padding:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
-    <div class="form-group" style="flex:0 0 160px">
-      <label>モデル（例: groq / groq/llama3-8b-8192）</label>
-      <input type="text" id="test-model" value="groq" placeholder="groq">
+  <div style="padding:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start">
+
+    <!-- AI名プルダウン -->
+    <div class="form-group" style="flex:0 0 150px">
+      <label>AI（プロバイダー）</label>
+      <select id="test-provider" onchange="updateModelList()">
+        <option value="groq">Groq 🆓</option>
+        <option value="openrouter">OpenRouter 🆓</option>
+        <option value="gemini">Gemini 🆓</option>
+        <option value="cerebras">Cerebras 🆓</option>
+      </select>
     </div>
+
+    <!-- モデル名プルダウン -->
+    <div class="form-group" style="flex:0 0 280px">
+      <label>モデル</label>
+      <select id="test-model-select">
+        <!-- JS で動的生成 -->
+      </select>
+      <div class="model-hint" id="model-hint"></div>
+    </div>
+
+    <!-- メッセージ -->
     <div class="form-group" style="flex:1;min-width:200px">
       <label>メッセージ</label>
       <input type="text" id="test-msg" placeholder="Hello! / こんにちは！" value="日本語で一言だけ挨拶して">
     </div>
-    <button class="btn btn-add" onclick="testChat()">🚀 送信</button>
+
+    <button class="btn btn-add" onclick="testChat()" style="align-self:flex-end">🚀 送信</button>
   </div>
   <div id="test-result" style="padding:0 14px 14px;font-size:.82rem;color:var(--muted);font-family:monospace;white-space:pre-wrap;word-break:break-all;display:none"></div>
 </div>
@@ -337,14 +358,35 @@
 <div id="toast"></div>
 
 <script>
+// ── モデル定義（無料プロバイダー＋推奨モデル）────────────────
+const PROVIDER_MODELS = {
+  'groq': [
+    { label: '🌟 qwen/qwen3.6-27b（メイン・深い思考・画像対応）', value: 'qwen/qwen3.6-27b', hint: 'Dense アーキテクチャ。コーディング・論理推論・画像理解が得意。速度より精度優先。' },
+    { label: '⚡ openai/gpt-oss-120b（高速・汎用）',               value: 'openai/gpt-oss-120b', hint: 'MoE アーキテクチャで超高速（実質51B）。日常チャット・要約・エージェントタスク向け。' },
+  ],
+  'openrouter': [
+    { label: '🌟 qwen/qwen3.6-27b（メイン・深い思考・画像対応）', value: 'qwen/qwen3.6-27b', hint: 'OpenRouter経由でアクセス。無料枠あり。' },
+    { label: '⚡ openai/gpt-oss-120b（高速・汎用）',               value: 'openai/gpt-oss-120b', hint: 'OpenRouter経由でアクセス。無料枠あり。' },
+  ],
+  'gemini': [
+    { label: 'gemini-2.0-flash（標準・無料）', value: 'gemini-2.0-flash', hint: 'Google製。マルチモーダル対応。無料ティアあり。' },
+    { label: 'gemini-1.5-flash（軽量・無料）', value: 'gemini-1.5-flash', hint: '軽量版。高速レスポンス。' },
+  ],
+  'cerebras': [
+    { label: 'llama3.1-8b（超高速・無料）',  value: 'llama3.1-8b',  hint: 'Cerebras独自ウェハースケールチップで超高速推論。' },
+    { label: 'llama3.1-70b（高品質・無料）', value: 'llama3.1-70b', hint: '70Bの高品質モデルを無料で利用可能。' },
+  ],
+};
+
 // ── State ──────────────────────────────────────────────────────
-let allKeys     = [];
+let allKeys      = [];
 let activeFilter = 'all';
 let rotationData = {};
 let todayActiveIds = new Set();
 
 // ── Init ──────────────────────────────────────────────────────
 (async () => {
+  updateModelList();  // 初期モデルリスト生成
   await Promise.all([loadKeys(), loadRotation()]);
   loadLog();
   startCountdown();
@@ -352,6 +394,27 @@ let todayActiveIds = new Set();
 
 // BASE PATH: プロキシ経由でも動くようURLから自動検出
 const BASE_PATH = window.location.pathname.replace(/\/admin$/, '');
+
+// ── モデルリスト動的生成 ─────────────────────────────────────
+function updateModelList() {
+  const provider = document.getElementById('test-provider').value;
+  const models   = PROVIDER_MODELS[provider] || [];
+  const sel      = document.getElementById('test-model-select');
+  sel.innerHTML  = models.map((m, i) =>
+    `<option value="${m.value}">${m.label}</option>`
+  ).join('');
+  updateModelHint();
+}
+
+function updateModelHint() {
+  const provider = document.getElementById('test-provider').value;
+  const models   = PROVIDER_MODELS[provider] || [];
+  const sel      = document.getElementById('test-model-select');
+  const selected = models.find(m => m.value === sel.value);
+  document.getElementById('model-hint').textContent = selected?.hint || '';
+  // select のchange時にもhintを更新
+  sel.onchange = updateModelHint;
+}
 
 // ── API Helpers ───────────────────────────────────────────────
 async function api(method, path, body) {
@@ -381,17 +444,13 @@ async function loadRotation() {
     const data = await api('GET', '/api/rotation');
     rotationData = data;
     todayActiveIds = new Set();
-
-    // Collect today's active key IDs
     for (const [, info] of Object.entries(data.providers || {})) {
       if (info.active_key) todayActiveIds.add(info.active_key.id);
     }
-
-    // Rotation chips
     const chips = document.getElementById('rot-chips');
     chips.innerHTML = '';
     for (const [prov, info] of Object.entries(data.providers || {})) {
-      const k = info.active_key;
+      const k    = info.active_key;
       const chip = document.createElement('div');
       chip.className = 'rot-chip';
       chip.innerHTML = `<span class="prov">${prov}</span>
@@ -402,8 +461,6 @@ async function loadRotation() {
     if (!Object.keys(data.providers || {}).length) {
       chips.innerHTML = '<span style="color:var(--muted)">キーが登録されていません</span>';
     }
-
-    // Countdown target
     window._nextRotation = new Date(data.next_rotation_jst.replace(' JST','').replace(' ','T') + '+09:00');
   } catch(e) { console.error(e); }
 }
@@ -424,7 +481,7 @@ function startCountdown() {
 // ── Render Tabs ───────────────────────────────────────────────
 function renderTabs() {
   const provs = [...new Set(allKeys.map(k => k.provider))].sort();
-  const tabs = document.getElementById('provider-tabs');
+  const tabs  = document.getElementById('provider-tabs');
   tabs.innerHTML = `<div class="tab ${activeFilter==='all'?'active':''}" data-prov="all" onclick="filterProv('all')">全て</div>`;
   provs.forEach(p => {
     const cnt = allKeys.filter(k => k.provider === p).length;
@@ -440,14 +497,14 @@ function filterProv(prov) {
 
 // ── Render Table ──────────────────────────────────────────────
 function renderTable() {
-  const keys = activeFilter === 'all' ? allKeys : allKeys.filter(k => k.provider === activeFilter);
+  const keys  = activeFilter === 'all' ? allKeys : allKeys.filter(k => k.provider === activeFilter);
   const tbody = document.getElementById('key-tbody');
   if (!keys.length) {
     tbody.innerHTML = `<tr><td colspan="8" class="empty">キーがありません。下のフォームから追加してください。</td></tr>`;
     return;
   }
   tbody.innerHTML = keys.map(k => {
-    const isToday = todayActiveIds.has(k.id);
+    const isToday    = todayActiveIds.has(k.id);
     const statusBadge = k.is_active
       ? `<span class="badge badge-green">✅ ON</span>`
       : `<span class="badge badge-red">❌ OFF</span>`;
@@ -507,19 +564,24 @@ async function toggleKey(id, currentActive) {
 
 // ── Chat Test ─────────────────────────────────────────────────
 async function testChat() {
-  const model = document.getElementById('test-model').value.trim() || 'groq';
-  const msg   = document.getElementById('test-msg').value.trim();
+  const provider = document.getElementById('test-provider').value;
+  const modelVal = document.getElementById('test-model-select').value;
+  const msg      = document.getElementById('test-msg').value.trim();
   if (!msg) { showToast('❌ メッセージを入力してください'); return; }
+
+  // litellm 形式: "provider/model" （モデルにスラッシュが含まれていてもOK）
+  const model = `${provider}/${modelVal}`;
+
   const res = document.getElementById('test-result');
   res.style.display = 'block';
   res.style.color = 'var(--muted)';
-  res.textContent = '⏳ 送信中...';
+  res.textContent = `⏳ 送信中... [${model}]`;
   try {
-    const t0 = Date.now();
+    const t0   = Date.now();
     const data = await api('POST', '/v1/chat', {
       model,
       messages: [{ role: 'user', content: msg }],
-      max_tokens: 512
+      max_tokens: 512,
     });
     const elapsed = Date.now() - t0;
     const content = data?.choices?.[0]?.message?.content || JSON.stringify(data, null, 2);
@@ -535,7 +597,7 @@ async function testChat() {
 // ── Log ───────────────────────────────────────────────────────
 async function loadLog() {
   try {
-    const rows = await api('GET', '/api/log?limit=30');
+    const rows  = await api('GET', '/api/log?limit=30');
     const tbody = document.getElementById('log-tbody');
     if (!rows.length) {
       tbody.innerHTML = `<tr><td colspan="6" class="empty">ログなし</td></tr>`;
@@ -566,7 +628,7 @@ function showToast(msg) {
 // Enter key shortcuts
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && document.getElementById('new-key') === document.activeElement) addKey();
-  if (e.key === 'Enter' && document.getElementById('test-msg') === document.activeElement) testChat();
+  if (e.key === 'Enter' && document.getElementById('test-msg')  === document.activeElement) testChat();
 });
 </script>
 </body>
