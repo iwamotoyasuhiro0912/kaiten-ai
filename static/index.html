@@ -28,6 +28,43 @@
     padding: 0 0 60px;
   }
 
+  /* ── Login Overlay ── */
+  #login-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(15,17,23,.97);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #login-overlay.hidden { display: none; }
+  .login-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 32px 28px;
+    width: min(360px, 92vw);
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .login-box h2 { font-size: 1.1rem; text-align: center; }
+  .login-box .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .login-box label { font-size: .75rem; color: var(--muted); }
+  .login-box input {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 7px;
+    padding: 9px 12px;
+    font-size: .9rem;
+    width: 100%;
+  }
+  .login-box input:focus { outline: none; border-color: var(--accent); }
+  .login-box .btn-login {
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 8px;
+    padding: 10px; font-size: .9rem; font-weight: 600;
+    cursor: pointer; transition: opacity .15s;
+  }
+  .login-box .btn-login:hover { opacity: .85; }
+  #login-error { color: var(--red); font-size: .8rem; text-align: center; min-height: 1em; }
+
   /* ── Header ── */
   header {
     background: linear-gradient(135deg, #1a1d27 0%, #16192b 100%);
@@ -215,6 +252,23 @@
 </head>
 <body>
 
+<!-- ── ログインオーバーレイ ── -->
+<div id="login-overlay">
+  <div class="login-box">
+    <h2>🍣 Kaiten AI Gateway</h2>
+    <div class="form-group">
+      <label>ユーザーID</label>
+      <input type="text" id="login-user" autocomplete="username" value="admin">
+    </div>
+    <div class="form-group">
+      <label>パスワード</label>
+      <input type="password" id="login-pass" autocomplete="current-password" placeholder="ADMIN_TOKEN の値">
+    </div>
+    <div id="login-error"></div>
+    <button class="btn-login" onclick="doLogin()">ログイン</button>
+  </div>
+</div>
+
 <header>
   <div>
     <h1>🍣 Kaiten AI Gateway</h1>
@@ -297,7 +351,6 @@
   </div>
   <div style="padding:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start">
 
-    <!-- AI名プルダウン -->
     <div class="form-group" style="flex:0 0 150px">
       <label>AI（プロバイダー）</label>
       <select id="test-provider" onchange="updateModelList()">
@@ -308,16 +361,12 @@
       </select>
     </div>
 
-    <!-- モデル名プルダウン -->
     <div class="form-group" style="flex:0 0 280px">
       <label>モデル</label>
-      <select id="test-model-select">
-        <!-- JS で動的生成 -->
-      </select>
+      <select id="test-model-select"></select>
       <div class="model-hint" id="model-hint"></div>
     </div>
 
-    <!-- メッセージ -->
     <div class="form-group" style="flex:1;min-width:200px">
       <label>メッセージ</label>
       <input type="text" id="test-msg" placeholder="Hello! / こんにちは！" value="日本語で一言だけ挨拶して">
@@ -358,6 +407,41 @@
 <div id="toast"></div>
 
 <script>
+// ── 認証クレデンシャル（メモリのみ・リロードで消える）────────
+let _authHeader = '';  // "Basic base64(user:pass)" or ''
+
+function setCredentials(user, pass) {
+  _authHeader = 'Basic ' + btoa(unescape(encodeURIComponent(user + ':' + pass)));
+}
+
+// ── ログイン処理 ──────────────────────────────────────────────
+async function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+
+  if (!user || !pass) {
+    errEl.textContent = 'ユーザーIDとパスワードを入力してください';
+    return;
+  }
+
+  setCredentials(user, pass);
+
+  // 認証テスト（/api/keysを叩いて確認）
+  try {
+    await api('GET', '/api/keys');
+    // 成功 → オーバーレイを隠してデータ読み込み
+    document.getElementById('login-overlay').classList.add('hidden');
+    await Promise.all([loadKeys(), loadRotation()]);
+    loadLog();
+    startCountdown();
+  } catch(e) {
+    _authHeader = '';
+    errEl.textContent = '❌ ' + (e.message.includes('401') ? 'ユーザーIDまたはパスワードが違います' : e.message);
+  }
+}
+
 // ── モデル定義（無料プロバイダー＋推奨モデル）────────────────
 const PROVIDER_MODELS = {
   'groq': [
@@ -409,22 +493,34 @@ const PROVIDER_MODELS = {
     },
   ],
 };
+
 // ── State ──────────────────────────────────────────────────────
 let allKeys      = [];
 let activeFilter = 'all';
 let rotationData = {};
 let todayActiveIds = new Set();
 
-// ── Init ──────────────────────────────────────────────────────
-(async () => {
-  updateModelList();  // 初期モデルリスト生成
-  await Promise.all([loadKeys(), loadRotation()]);
-  loadLog();
-  startCountdown();
-})();
-
 // BASE PATH: プロキシ経由でも動くようURLから自動検出
 const BASE_PATH = window.location.pathname.replace(/\/admin$/, '');
+
+// ── 起動時：ログインオーバーレイを表示（認証チェック）────────
+(async () => {
+  updateModelList();
+  // ADMIN_TOKEN未設定の場合は認証不要でそのまま読み込む
+  try {
+    setCredentials('', '');
+    await api('GET', '/api/keys');
+    // 認証不要環境 → オーバーレイ非表示
+    document.getElementById('login-overlay').classList.add('hidden');
+    await Promise.all([loadKeys(), loadRotation()]);
+    loadLog();
+    startCountdown();
+  } catch(e) {
+    // 401 → ログインフォームを表示（オーバーレイはデフォルト表示）
+    _authHeader = '';
+    document.getElementById('login-pass').focus();
+  }
+})();
 
 // ── モデルリスト動的生成 ─────────────────────────────────────
 function updateModelList() {
@@ -446,12 +542,20 @@ function updateModelHint() {
   sel.onchange = updateModelHint;
 }
 
-// ── API Helpers ───────────────────────────────────────────────
+// ── API Helpers（Authorizationヘッダー付き）──────────────────
 async function api(method, path, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  const headers = { 'Content-Type': 'application/json' };
+  if (_authHeader) headers['Authorization'] = _authHeader;
+  const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(BASE_PATH + path, opts);
   if (!r.ok) {
+    if (r.status === 401) {
+      // セッション切れ等 → ログインオーバーレイを再表示
+      _authHeader = '';
+      document.getElementById('login-overlay').classList.remove('hidden');
+      throw new Error('401 認証が必要です');
+    }
     const err = await r.json().catch(() => ({ error: r.statusText }));
     throw new Error(err.error || r.statusText);
   }
@@ -599,7 +703,6 @@ async function testChat() {
   const msg      = document.getElementById('test-msg').value.trim();
   if (!msg) { showToast('❌ メッセージを入力してください'); return; }
 
-  // litellm 形式: "provider/model"
   const model = `${provider}/${modelVal}`;
 
   const res = document.getElementById('test-result');
@@ -657,8 +760,9 @@ function showToast(msg) {
 
 // Enter key shortcuts
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && document.getElementById('new-key') === document.activeElement) addKey();
-  if (e.key === 'Enter' && document.getElementById('test-msg')  === document.activeElement) testChat();
+  if (e.key === 'Enter' && document.getElementById('login-pass') === document.activeElement) doLogin();
+  if (e.key === 'Enter' && document.getElementById('new-key')    === document.activeElement) addKey();
+  if (e.key === 'Enter' && document.getElementById('test-msg')   === document.activeElement) testChat();
 });
 </script>
 </body>
