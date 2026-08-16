@@ -145,6 +145,20 @@ def record_usage(key_id, provider, model, status, tokens, latency_ms):
         conn.execute("INSERT INTO request_log (provider,model,key_id,status,tokens,latency_ms) VALUES(?,?,?,?,?,?)", (provider, model, key_id, status, tokens, latency_ms))
         conn.commit()
 
+def inject_no_think(messages: list, litellm_model: str) -> list:
+    """Qwen3系思考モデル使用時、先頭ユーザーメッセージに /no_think を注入して思考ブロック出力を抑制する"""
+    if "qwen3" not in litellm_model.lower():
+        return messages
+    import copy
+    msgs = copy.deepcopy(messages)
+    for msg in msgs:
+        if msg.get("role") == "user":
+            content = msg.get("content", "")
+            if isinstance(content, str) and not content.startswith("/no_think"):
+                msg["content"] = "/no_think\n" + content
+            break
+    return msgs
+
 @asynccontextmanager
 async def lifespan(app):
     init_db()
@@ -202,10 +216,11 @@ async def chat(req: ChatRequest):
         raise HTTPException(503, {"error": f"No active API key for '{provider}'", "hint": f"Add keys at /admin or POST /api/keys"})
     litellm_prefix = PROVIDER_MAP[provider]
     litellm_model = f"{litellm_prefix}/{model_suffix}" if model_suffix else DEFAULT_MODELS.get(provider, f"{litellm_prefix}/default")
+    messages_to_send = inject_no_think(req.messages, litellm_model)
     import time
     t0 = time.time()
     try:
-        response = await litellm.acompletion(model=litellm_model, messages=req.messages, temperature=req.temperature, max_tokens=req.max_tokens, api_key=key_info["api_key"])
+        response = await litellm.acompletion(model=litellm_model, messages=messages_to_send, temperature=req.temperature, max_tokens=req.max_tokens, api_key=key_info["api_key"])
         latency = int((time.time() - t0) * 1000)
         tokens = getattr(response.usage, "total_tokens", 0) if hasattr(response, "usage") else 0
         record_usage(key_info["id"], provider, litellm_model, "ok", tokens, latency)
